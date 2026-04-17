@@ -1,0 +1,21 @@
+# Віртуальне середовище
+venv/
+env/
+
+# База даних SQLite (базу не пушать у загальний доступ)
+db.sqlite3
+
+# Кеш Python та міграцій
+__pycache__/
+*.py[cod]
+*$py.class
+*/migrations/00*.py
+!*/migrations/__init__.py
+
+# Медіа та статика
+media/
+staticfiles/
+
+# Системні файли Windows/Mac
+.DS_Store
+Thumbs.db

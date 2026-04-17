@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Канал Оголошень{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .online-indicator {
+            width: 10px;
+            height: 10px;
+            background-color: #28a745;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1050;
+            min-width: 300px;
+        }
+        
+        .user-activity {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="{% url 'home' %}">
+                <i class="fas fa-bullhorn"></i> Канал Оголошень
+            </a>
+            
+            <div class="navbar-nav ms-auto">
+                {% if user.is_authenticated %}
+                    <span class="navbar-text me-3">
+                        <span class="online-indicator"></span>
+                        Вітаємо, {{ user.first_name|default:user.username }}!
+                    </span>
+                    <span class="navbar-text me-3" id="online-count">
+                        Онлайн: <span class="badge bg-success">0</span>
+                    </span>
+                    {% if user.is_staff %}
+                        <a class="nav-link" href="{% url 'admin-dashboard' %}">Admin Dashboard</a>
+                    {% endif %}
+                    
+                    <form method="post" action="{% url 'logout' %}" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn nav-link border-0 bg-transparent" style="display: inline; padding: 0;">Вийти</button>
+                    </form>
+                {% else %}
+                    <a class="nav-link" href="{% url 'login' %}">Увійти</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mt-4">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Notification container -->
+    <div id="notification-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    {% if user.is_authenticated %}
+    <script>
+        // WebSocket connection
+        let ws = null;
+        
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/realtime/`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function(event) {
+                console.log('WebSocket connected');
+                // Надіслати інформацію про поточну сторінку
+                ws.send(JSON.stringify({
+                    type: 'page_visit',
+                    url: window.location.pathname,
+                    title: document.title
+                }));
+            };
+            
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                handleWebSocketMessage(data);
+            };
+            
+            ws.onclose = function(event) {
+                console.log('WebSocket disconnected');
+                // Спробувати перепідключитися через 3 секунди
+                setTimeout(connectWebSocket, 3000);
+            };
+            
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
+            };
+        }
+        
+        function handleWebSocketMessage(data) {
+            console.log("Отримано повідомлення:", data);
+
+            switch(data.type) {
+                case 'initial_data':
+                    updateOnlineCount(data.online_count); 
+                    break;
+                case 'user_status':
+                    updateOnlineCount(data.online_count);
+                    showNotification(`${data.user.username} ${data.action === 'user_connected' ? 'підключився' : 'відключився'}`, 'info');
+                    break;
+                case 'notification':
+                    showNotification(data.message, 'info');
+                    break;
+                case 'reaction_update':
+                    handleReactionUpdate(data);
+                    break;
+            }
+        }
+
+        function updateOnlineCount(count) {
+            const onlineCountElement = document.querySelector('#online-count .badge');
+            if (onlineCountElement) {
+                onlineCountElement.textContent = count;
+            }
+            
+            const sidebarCountElement = document.getElementById('sidebar-online-count');
+            if (sidebarCountElement) {
+                sidebarCountElement.textContent = count;
+            }
+        }
+
+        function showNotification(message, type = 'info') {
+            const container = document.getElementById('notification-container');
+            const notification = document.createElement('div');
+            notification.className = `alert alert-${type === 'info' ? 'info' : type === 'success' ? 'success' : 'warning'} alert-dismissible fade show notification`;
+            notification.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            container.appendChild(notification);
+            
+            // Автоматично видалити через 5 секунд
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 5000);
+        }
+        
+        // Підтримка з'єднання
+        setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({type: 'ping'}));
+            }
+        }, 30000); // Кожні 30 секунд
+        
+        // Підключитися при завантаженні сторінки
+        document.addEventListener('DOMContentLoaded', connectWebSocket);
+        
+        // Повідомляти про зміну сторінки
+        window.addEventListener('beforeunload', () => {
+            if (ws) {
+                ws.close();
+            }
+        });
+        
+        function handleReactionUpdate(data) {
+            const announcementElements = document.querySelectorAll(`[data-announcement-id="${data.announcement_id}"]`);
+            
+            announcementElements.forEach(el => {
+                const likeEl = el.querySelector('.count-like');
+                const heartEl = el.querySelector('.count-heart');
+                const fireEl = el.querySelector('.count-fire');
+                const sadEl = el.querySelector('.count-sad');
+                
+                if (likeEl) likeEl.textContent = data.counts.like;
+                if (heartEl) heartEl.textContent = data.counts.heart;
+                if (fireEl) fireEl.textContent = data.counts.fire;
+                if (sadEl) sadEl.textContent = data.counts.sad;
+            });
+            
+            if (typeof showNotification === 'function') {
+                showNotification(`${data.user} оновив реакції!`, 'info');
+            }
+            
+            if (window.location.pathname === '/') {
+                const reactionsContainer = document.getElementById('recent-reactions-list');
+                if (reactionsContainer) {
+                    fetch(window.location.href)
+                        .then(response => response.text())
+                        .then(html => {
+                            const parser = new DOMParser();
+                            const doc = parser.parseFromString(html, 'text/html');
+                            const newReactions = doc.getElementById('recent-reactions-list');
+                            if (newReactions) {
+                                reactionsContainer.innerHTML = newReactions.innerHTML;
+                            }
+                        })
+                        .catch(err => console.error("Помилка фонового оновлення:", err));
+                }
+            }
+        }
+
+        function toggleReaction(announcementId, reactionType) {
+            fetch('/api/reactions/toggle/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ announcement: announcementId, reaction_type: reactionType })
+            })
+            .then(response => {
+                if (response.ok && ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'reaction_toggled', announcement_id: announcementId }));
+                }
+            });
+        }
+
+        // Утиліта для отримання CSRF токена
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+    </script>
+    {% endif %}
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>

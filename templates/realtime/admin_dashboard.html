@@ -1,0 +1,190 @@
+{% extends 'base.html' %}
+
+{% block title %}Admin Dashboard - Канал Оголошень{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="fas fa-tachometer-alt"></i> Адміністративна панель</h2>
+        <p class="text-muted">Моніторинг онлайн користувачів та активності в реальному часі</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <h5><i class="fas fa-chart-line text-primary"></i> Статистика</h5>
+            </div>
+            <div class="card-body">
+                <div id="stats-container">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Завантаження...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-8">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <h5><i class="fas fa-users text-success"></i> Онлайн користувачі</h5>
+            </div>
+            <div class="card-body">
+                <div id="online-users-table">
+                    </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <h5><i class="fas fa-history text-warning"></i> Активність користувачів</h5>
+            </div>
+            <div class="card-body">
+                <div id="activity-log" style="max-height: 400px; overflow-y: auto;">
+                    </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function loadStats() {
+        fetch('/api/realtime/stats/')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('stats-container');
+            container.innerHTML = `
+                <div class="row text-center">
+                    <div class="col-6">
+                        <h3 class="text-primary">${data.online_count}</h3>
+                        <small class="text-muted">Онлайн користувачів</small>
+                    </div>
+                    <div class="col-6">
+                        <h3 class="text-success">${Object.keys(data.page_statistics).length}</h3>
+                        <small class="text-muted">Активних сторінок</small>
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <h6>Статистика по сторінках:</h6>
+                <div class="list-group list-group-flush">
+                    ${Object.entries(data.page_statistics).map(([page, count]) => `
+                        <div class="list-group-item d-flex justify-content-between align-items-center py-2">
+                            <small>${page || 'Головна'}</small>
+                            <span class="badge bg-primary rounded-pill">${count}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        })
+        .catch(error => {
+            console.error('Error loading stats:', error);
+            document.getElementById('stats-container').innerHTML = 
+                '<div class="alert alert-danger">Помилка завантаження статистики</div>';
+        });
+    }
+    
+    function loadOnlineUsers() {
+        fetch('/api/realtime/online-users/')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('online-users-table');
+            
+            const usersList = data.results ? data.results : data;
+            
+            if (!usersList || usersList.length === 0) {
+                container.innerHTML = '<p class="text-muted">Немає онлайн користувачів</p>';
+                return;
+            }
+            
+            container.innerHTML = `
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Користувач</th>
+                                <th>Підключився</th>
+                                <th>Остання активність</th>
+                                <th>Поточна сторінка</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${usersList.map(user => `
+                                <tr>
+                                    <td>
+                                        <span class="online-indicator"></span>
+                                        <strong>${user.full_name || user.username || 'Невідомий'}</strong><br>
+                                        <small class="text-muted">${user.username}</small>
+                                    </td>
+                                    <td><small>${new Date(user.connected_at).toLocaleString()}</small></td>
+                                    <td><small>${new Date(user.last_activity).toLocaleString()}</small></td>
+                                    <td><small>${user.page_url || 'Невідомо'}</small></td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        })
+        .catch(error => {
+            console.error('Error loading online users:', error);
+        });
+    }
+    
+    function loadActivity() {
+        fetch('/api/realtime/activity/')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('activity-log');
+            
+            if (data.results.length === 0) {
+                container.innerHTML = '<p class="text-muted">Немає записів активності</p>';
+                return;
+            }
+            
+            container.innerHTML = data.results.map(activity => `
+                <div class="border-bottom py-2">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <strong>${activity.user}</strong>
+                            <span class="badge bg-secondary ms-2">${activity.activity_type_display}</span>
+                            <p class="mb-1 mt-1">${activity.description}</p>
+                        </div>
+                        <small class="text-muted">${new Date(activity.created_at).toLocaleString()}</small>
+                    </div>
+                </div>
+            `).join('');
+        })
+        .catch(error => {
+            console.error('Error loading activity:', error);
+        });
+    }
+    
+    // Завантажити дані при завантаженні сторінки
+    document.addEventListener('DOMContentLoaded', function() {
+        loadStats();
+        loadOnlineUsers();
+        loadActivity();
+        
+        // Оновлювати дані кожні 10 секунд
+        setInterval(() => {
+            loadStats();
+            loadOnlineUsers();
+        }, 10000);
+        
+        // Оновлювати активність кожні 30 секунд
+        setInterval(loadActivity, 30000);
+    });
+</script>
+{% endblock %}
