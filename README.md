@@ -70,3 +70,12 @@ python manage.py createsuperuser
 ``` bash
 python manage.py runserver
 ```
+7. (Опціонально) Наповнити базу тестовими даними:
+``` bash
+python manage.py populate_db
+```
+Дані тестового адміна для входу:
+``` bash
+email: admin@example.com
+password: adminpass123
+```
