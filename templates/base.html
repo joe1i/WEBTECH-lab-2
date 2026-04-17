@@ -56,11 +56,7 @@
                     {% if user.is_staff %}
                         <a class="nav-link" href="{% url 'admin-dashboard' %}">Admin Dashboard</a>
                     {% endif %}
-                    
-                    <form method="post" action="{% url 'logout' %}" class="d-inline">
-                        {% csrf_token %}
-                        <button type="submit" class="btn nav-link border-0 bg-transparent" style="display: inline; padding: 0;">Вийти</button>
-                    </form>
+                    <a class="nav-link" href="{% url 'logout' %}">Вийти</a>
                 {% else %}
                     <a class="nav-link" href="{% url 'login' %}">Увійти</a>
                 {% endif %}
