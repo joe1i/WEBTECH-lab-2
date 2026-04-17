@@ -1,21 +1,32 @@
-# Віртуальне середовище
-venv/
-env/
-
-# База даних SQLite (базу не пушать у загальний доступ)
-db.sqlite3
-
-# Кеш Python та міграцій
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-*/migrations/00*.py
-!*/migrations/__init__.py
+*.so
+.Python
+env/
+venv/
+.venv
+pip-log.txt
 
-# Медіа та статика
+# Django
+*.log
+local_settings.py
+db.sqlite3
 media/
-staticfiles/
 
-# Системні файли Windows/Mac
+# Redis dump
+dump.rdb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
 .DS_Store
 Thumbs.db
+
+# Node modules (if using npm)
+node_modules/
